@@ -1,55 +1,64 @@
 import os
 import requests
+from bs4 import BeautifulSoup
 import json
 from datetime import datetime
 from supabase import create_client
 
-def scrape_automated_leads():
-    print("--- VEILLE COMMERCIALE AUTOMATIQUE (73, 74, 01) ---")
+def scrape_deep_leads():
+    print("--- RECHERCHE DE CHANTIERS RÉELS (73, 74, 01) ---")
     
-    # Configuration Supabase
-    url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_KEY")
-    supabase = create_client(url, key)
+    url_supabase = os.environ.get("SUPABASE_URL")
+    key_supabase = os.environ.get("SUPABASE_KEY")
+    supabase = create_client(url_supabase, key_supabase)
 
-    leads_found = []
-
-    # On simule ici la capture de flux RSS/API de journaux officiels (BODACC/Societe)
-    # Dans une version avancée, on connecterait une API de Sirène/Siret
-    search_queries = [
-        "Boulangerie", "Entrepôt", "Garage", "Restaurant", "Logistique"
+    leads_reels = []
+    # On cherche des mots-clés très précis de "chantier" ou "permis"
+    requetes = [
+        "permis+de+construire+commerce+haute-savoie",
+        "construction+entrepot+savoie",
+        "nouvelle+zone+commerciale+ain"
     ]
-    
-    for sector in search_queries:
-        # On crée une structure de lead basée sur les nouvelles immatriculations probables
-        # Le robot va chercher des preuves de chantiers récents
-        lead = {
-            "name": f"Projet {sector} - Détection Auto",
-            "type": sector,
-            "location": "Savoie / Haute-Savoie",
-            "notes": f"Nouvelle activité détectée. Potentiel marquage au sol {sector}.",
-            "estimated_value": "À définir",
-            "status": "new",
-            "source_url": f"https://www.google.com/search?q=construction+{sector}+74",
-            "department": "74",
-            "created_at": datetime.now().isoformat()
-        }
-        leads_found.append(lead)
 
-    # 1. CRÉATION SYSTÉMATIQUE DU FICHIER (Pour supprimer l'erreur GitHub)
+    for req in requetes:
+        # On interroge Google News pour avoir les articles de presse récents
+        google_url = f"https://news.google.com/search?q={req}&hl=fr&gl=FR&ceid=FR:fr"
+        try:
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            page = requests.get(google_url, headers=headers)
+            soup = BeautifulSoup(page.text, 'html.parser')
+            
+            # On prend les 3 premiers articles de chaque recherche
+            articles = soup.find_all('article', limit=3)
+            for art in articles:
+                titre = art.find('a', class_='J7YVsc')
+                if titre:
+                    titre_texte = titre.text
+                    lien = "https://news.google.com" + titre['href'][1:]
+                    
+                    lead = {
+                        "name": titre_texte[:100],
+                        "type": "Chantier Détecté",
+                        "location": "73/74/01",
+                        "notes": "Vérifier l'adresse exacte dans l'article source.",
+                        "estimated_value": "À chiffrer",
+                        "status": "new",
+                        "source_url": lien, # LE LIEN RÉEL POUR TES YEUX
+                        "department": "74"
+                    }
+                    leads_reels.append(lead)
+        except Exception as e:
+            print(f"Erreur recherche : {e}")
+
+    # On enregistre le fichier pour GitHub
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f"leads_progmarquage_{timestamp}.json"
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(leads_found, f, ensure_ascii=False, indent=2)
-    print(f"✅ Fichier de veille créé : {filename}")
+    with open(f"leads_progmarquage_{timestamp}.json", 'w', encoding='utf-8') as f:
+        json.dump(leads_reels, f, ensure_ascii=False, indent=2)
 
-    # 2. ENVOI SUPABASE
-    try:
-        if leads_found:
-            supabase.table("leads").insert(leads_found).execute()
-            print(f"✅ {len(leads_found)} leads envoyés au SaaS.")
-    except Exception as e:
-        print(f"❌ Erreur Supabase : {e}")
+    # Envoi Supabase
+    if leads_reels:
+        supabase.table("leads").insert(leads_reels).execute()
+        print(f"✅ {len(leads_reels)} vrais projets envoyés !")
 
 if __name__ == "__main__":
-    scrape_automated_leads()
+    scrape_deep_leads()
