@@ -1,0 +1,41 @@
+name: ProgMarquage Auto Scraper
+
+# Lance le scraper automatiquement toutes les 6 heures
+on:
+  schedule:
+    # Tous les jours à 6h, 12h, 18h et 00h (UTC)
+    - cron: '0 6,12,18,0 * * *'
+  
+  # Permet aussi de lancer manuellement
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Run scraper
+      run: |
+        python progmarquage_scraper.py
+      env:
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    
+    - name: Upload leads file
+      uses: actions/upload-artifact@v3
+      with:
+        name: leads-found
+        path: leads_progmarquage_*.json
+        retention-days: 30
