@@ -4,101 +4,86 @@ from bs4 import BeautifulSoup
 import json
 from datetime import datetime
 from supabase import create_client
-import time
+import random
 
-def scrape_ultra_massive():
-    print("--- 🛰️ DÉMARRAGE DU SCRAPER MASSIF : OBJECTIF 100% LEADS ---")
+def scrape_expert_war_mode():
+    print("--- ⚔️ MODE GUERRE TOTALE : EXTRACTION MAXIMALE ---")
     
+    # 1. SETUP SUPABASE
     url_supabase = os.environ.get("SUPABASE_URL")
     key_supabase = os.environ.get("SUPABASE_KEY")
     supabase = create_client(url_supabase, key_supabase)
 
-    all_leads = []
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-
-    # 1. LISTE DE RECHERCHE GÉANTE (3 derniers mois + Secteurs clés)
-    # On ratisse TOUT ce qui nécessite du marquage au sol
-    search_matrix = [
-        # SECTEUR COMMERCE
-        "nouveau+commerce+ouverture+2025+2026+haute-savoie",
-        "projet+boulangerie+neuve+savoie+73",
-        "construction+supermarché+lidl+aldi+74",
-        "centre+commercial+extension+ain+01",
-        # SECTEUR INDUSTRIE & LOGISTIQUE (Gros chantiers)
-        "permis+construire+entrepôt+logistique+74",
-        "plateforme+logistique+construction+savoie",
-        "extension+usine+zone+industrielle+ain",
-        "parc+d+activité+nouveau+haute-savoie",
-        # SECTEUR RÉSIDENTIEL & COLLECTIF
-        "programme+immobilier+neuf+parking+annecy",
-        "résidence+étudiante+construction+chambéry",
-        "copropriété+neuve+parking+souterrain+74",
-        # SECTEUR SERVICES & LOISIRS
-        "nouveau+garage+automobile+73+74",
-        "construction+salle+de+sport+fitness+ain",
-        "clinique+ehpad+nouveau+projet+savoie"
+    leads_extraits = []
+    
+    # Rotation de User-Agents pour éviter d'être banni par Google
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
     ]
 
-    # 2. MOTEUR DE COLLECTE
-    for query in search_matrix:
-        print(f"🔍 Scan profond : {query.replace('+', ' ')}")
-        # On utilise le paramètre 'when:3m' pour les 3 derniers mois si disponible via URL
-        google_url = f"https://news.google.com/search?q={query}&hl=fr&gl=FR&ceid=FR:fr"
+    # Requêtes ultra-larges pour les 3 derniers mois (73, 74, 01)
+    # On cherche l'INTENTION de construire
+    queries = [
+        "chantier+parking+haute-savoie",
+        "permis+construire+entrepot+savoie",
+        "amenagement+zone+commerciale+ain",
+        "construction+boulangerie+74",
+        "nouveau+batiment+industriel+73",
+        "marquage+sol+chantier+rhone-alpes"
+    ]
+
+    # 2. COLLECTE AGGRESSIVE
+    for q in queries:
+        print(f"📡 Scan : {q.replace('+', ' ')}")
+        url = f"https://news.google.com/search?q={q}+when:3m&hl=fr&gl=FR&ceid=FR:fr"
         
         try:
-            page = requests.get(google_url, headers=headers, timeout=20)
-            soup = BeautifulSoup(page.text, 'html.parser')
-            articles = soup.find_all('article', limit=15) # On passe à 15 résultats par requête
+            res = requests.get(url, headers={'User-Agent': random.choice(user_agents)}, timeout=15)
+            soup = BeautifulSoup(res.text, 'html.parser')
+            # On cherche tous les liens d'articles
+            articles = soup.find_all('article', limit=10)
 
             for art in articles:
-                titre_elem = art.find('a', class_='J7YVsc') or art.find('h3')
-                if titre_elem:
-                    titre = titre_elem.text
-                    link_elem = art.find('a')
-                    lien = "https://news.google.com" + link_elem['href'][1:] if link_elem else "Lien indisponible"
+                title_tag = art.find('a', class_='J7YVsc') or art.find('h3')
+                if title_tag:
+                    title = title_tag.text
+                    link = "https://news.google.com" + art.find('a')['href'][1:]
                     
-                    # Intelligence de tri par département
-                    dept = "74"
-                    if any(x in titre.lower() for x in ["73", "savoie", "chambéry", "aix"]): dept = "73"
-                    elif any(x in titre.lower() for x in ["01", "ain", "bourg", "oyonnax"]): dept = "01"
-
-                    # Nettoyage et typage
-                    all_leads.append({
-                        "name": titre[:120],
-                        "type": "Chantier / Projet Neuf",
-                        "location": f"Secteur {dept}",
-                        "notes": "Détecté par scan massif 3 mois. Cliquer sur la source pour l'adresse.",
-                        "estimated_value": "À chiffrer",
+                    leads_extraits.append({
+                        "name": title[:120],
+                        "type": "PROJET NEUF",
+                        "location": "73/74/01",
+                        "notes": "Détecté par scan expert. Potentiel marquage au sol élevé.",
+                        "estimated_value": "A chiffrer",
                         "status": "new",
-                        "source_url": lien,
-                        "department": dept,
+                        "source_url": link,
+                        "department": "74",
                         "created_at": datetime.now().isoformat()
                     })
-            time.sleep(1) # Pause pour éviter le blocage
         except Exception as e:
-            print(f"Erreur sur {query}: {e}")
+            print(f"⚠️ Erreur sur la requête {q}: {e}")
 
-    # 3. FILTRAGE DES DOUBLONS (Basé sur le titre)
-    unique_leads = {v['name']: v for v in all_leads}.values()
-    final_list = list(unique_leads)
-
-    # 4. SAUVEGARDE ET EXPORT
+    # 3. SAUVEGARDE FORCÉE (Pour ne plus avoir l'erreur GitHub)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    with open(f"leads_massive_{timestamp}.json", 'w', encoding='utf-8') as f:
-        json.dump(final_list, f, ensure_ascii=False, indent=2)
+    filename = f"leads_progmarquage_{timestamp}.json"
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(leads_extraits, f, ensure_ascii=False, indent=2)
+    print(f"💾 Fichier de secours créé : {filename}")
 
-    if final_list:
+    # 4. ENVOI SUPABASE
+    if leads_extraits:
         try:
-            # Envoi par paquets vers Supabase pour éviter les erreurs de timeout
-            chunk_size = 50
-            for i in range(0, len(final_list), chunk_size):
-                chunk = final_list[i:i + chunk_size]
-                supabase.table("leads").insert(chunk).execute()
-            print(f"✅ MISSION RÉUSSIE : {len(final_list)} leads uniques envoyés au SaaS !")
+            # Suppression des doublons
+            unique_leads = {v['name']: v for v in leads_extraits}.values()
+            supabase.table("leads").insert(list(unique_leads)).execute()
+            print(f"🚀 {len(unique_leads)} leads injectés dans le SaaS !")
         except Exception as e:
-            print(f"Erreur Supabase : {e}")
+            print(f"❌ Erreur d'injection Supabase : {e}")
+            print("Vérifie que ta table a bien les colonnes : name, type, location, notes, estimated_value, status, source_url, department")
     else:
-        print("⚠️ Aucun résultat trouvé malgré le scan massif.")
+        print("Empty: Rien trouvé cette fois-ci.")
 
 if __name__ == "__main__":
-    scrape_ultra_massive()
+    scrape_expert_war_mode()
