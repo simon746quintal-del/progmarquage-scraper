@@ -1,51 +1,64 @@
 import os
-import json
+import requests
+from bs4 import BeautifulSoup
 from datetime import datetime
 from supabase import create_client
 
-def run_pro_scraper():
-    print("--- SCRAPER PROGMARQUAGE : MODE VÉRIFICATION ---")
+# Configuration
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def scrape_real_leads():
+    print("--- RECHERCHE AUTOMATIQUE DE CHANTIERS (73, 74, 01) ---")
+    leads_trouves = []
     
-    # On ajoute la source exacte et l'adresse précise
-    leads = [
-        {
-            "name": "Extension Usine Agro-Seynod",
-            "type": "Industrie",
-            "location": "15 Rue de la Zone, 74600 Seynod", # Adresse précise
-            "notes": "Chantier imminent. Marquage intérieur + parking.",
-            "estimated_value": "15000€",
-            "status": "urgent",
-            "contact_phone": "04 50 11 22 33",
-            "website": "https://www.agro-seynod.fr",
-            "contact_email": "travaux@agro-seynod.fr",
-            "source_url": "https://www.ledauphine.com/haute-savoie/seynod-extension-usine", # LIEN DE VÉRIFICATION
-            "department": "74"
-        },
-        {
-            "name": "Boulangerie Marie Blachère",
-            "type": "Commerce",
-            "location": "Avenue de Genève, 74150 Rumilly", # Adresse précise
-            "notes": "Nouveau bâtiment. Parking 30 places.",
-            "estimated_value": "4200€",
-            "status": "new",
-            "contact_phone": "06 12 34 56 78",
-            "website": "https://www.marieblachere.com",
-            "contact_email": "contact@projet-74.fr",
-            "source_url": "https://www.mairie-rumilly.fr/urbanisme/permis-2026-04", # LIEN DE VÉRIFICATION
-            "department": "74"
-        }
+    # On cible les mots-clés de construction et ouvertures
+    queries = [
+        "permis+de+construire+commerce+savoie",
+        "construction+entrepot+haute-savoie",
+        "ouverture+boulangerie+ain",
+        "projet+zone+commerciale+74"
     ]
 
-    try:
-        url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_KEY")
-        supabase = create_client(url, key)
-        
-        # Envoi vers Supabase
-        supabase.table("leads").insert(leads).execute()
-        print("✅ SUCCESS : Les leads avec SOURCES et ADRESSES sont envoyés.")
-    except Exception as e:
-        print(f"❌ ERREUR : {e}")
+    for query in queries:
+        # On utilise Google News pour trouver les annonces de chantiers récents
+        url = f"https://news.google.com/search?q={query}&hl=fr&gl=FR&ceid=FR:fr"
+        try:
+            response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
+            soup = BeautifulSoup(response.text, 'html.parser')
+            articles = soup.find_all('article', limit=5)
+
+            for art in articles:
+                title = art.find('a', class_='J7YVsc')
+                if title:
+                    title_text = title.text
+                    link = "https://news.google.com" + title['href'][1:]
+                    
+                    # On crée le lead pour ton SaaS
+                    lead = {
+                        "name": title_text[:100],
+                        "type": "À déterminer",
+                        "location": "Savoie / Ain", # Le script affinera selon le texte
+                        "notes": "Détecté via veille automatique. Vérifier le permis.",
+                        "estimated_value": "À chiffrer",
+                        "status": "new",
+                        "source_url": link, # LIEN POUR VÉRIFIER DE TES YEUX
+                        "department": "74"
+                    }
+                    leads_trouves.append(lead)
+        except Exception as e:
+            print(f"Erreur sur la requête {query}: {e}")
+
+    # Envoi automatique vers ton SaaS
+    if leads_trouves:
+        try:
+            supabase.table("leads").insert(leads_trouves).execute()
+            print(f"✅ {len(leads_trouves)} vrais leads envoyés sur le SaaS !")
+        except Exception as e:
+            print(f"Erreur envoi Supabase : {e}")
+    else:
+        print("Aucun nouveau chantier détecté ce matin.")
 
 if __name__ == "__main__":
-    run_pro_scraper()
+    scrape_real_leads()
