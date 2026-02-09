@@ -6,12 +6,13 @@ from supabase import create_client
 def run_final_scraper():
     print("--- DÉMARRAGE SCRAPER PROGMARQUAGE ---")
     
+    # Données avec sites et contacts pour tester ton SaaS
     leads = [
         {
-            "name": "Extension Usine Agroalimentaire",
+            "name": "Extension Usine Agro-Seynod",
             "type": "Industrie",
             "location": "Seynod (74)",
-            "notes": "Chantier en cours. 2000m² de marquage intérieur sécurité + parking.",
+            "notes": "Chantier imminent. 2000m² de marquage intérieur sécurité + parking.",
             "estimated_value": "15000€",
             "status": "urgent",
             "contact_phone": "04 50 11 22 33",
@@ -20,28 +21,16 @@ def run_final_scraper():
             "department": "74"
         },
         {
-            "name": "Nouvelle Boulangerie Artisanale",
+            "name": "Boulangerie Marie Blachère",
             "type": "Commerce",
             "location": "Rumilly (74)",
-            "notes": "Ouverture prévue mai 2026. Parking 25 places à tracer.",
-            "estimated_value": "3500€",
+            "notes": "Nouveau bâtiment. Parking 30 places + zone livraison à tracer.",
+            "estimated_value": "4200€",
             "status": "new",
             "contact_phone": "06 12 34 56 78",
-            "website": "https://www.boulangerie-rumilly.fr",
-            "contact_email": "contact@boulangerie-rumilly.fr",
+            "website": "https://www.marieblachere.com",
+            "contact_email": "contact@projet-74.fr",
             "department": "74"
-        },
-        {
-            "name": "Zone Commerciale Bourg-en-Bresse",
-            "type": "Commerce",
-            "location": "Bourg-en-Bresse (01)",
-            "notes": "Aménagement de 4 nouveaux magasins. Gros lot de marquage au sol.",
-            "estimated_value": "28000€",
-            "status": "new",
-            "contact_phone": "04 74 00 11 22",
-            "website": "https://www.bourg-commerces.com",
-            "contact_email": "immo@bourg-commerces.com",
-            "department": "01"
         }
     ]
 
@@ -51,7 +40,7 @@ def run_final_scraper():
         key = os.environ.get("SUPABASE_KEY")
         supabase = create_client(url, key)
         
-        # Envoi des leads vers la table 'leads'
+        # Insertion dans la table 'leads'
         supabase.table("leads").insert(leads).execute()
         print("✅ SUCCESS : Les leads avec Site et Contacts sont dans ton SaaS !")
     except Exception as e:
