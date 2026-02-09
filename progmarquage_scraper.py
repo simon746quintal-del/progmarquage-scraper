@@ -17,13 +17,10 @@ def scrape_expert_system():
 
     # STRATÉGIE MULTI-SOURCES : On cible l'intention de construire
     cibles = [
-        # 1. Urbanisme et Permis (Le Graal)
         {"q": "avis+depot+permis+de+construire+commercial+74", "type": "Permis de Construire"},
         {"q": "consultation+publique+projet+immobilier+annecy", "type": "Résidence / Collectif"},
-        # 2. Développement Économique (Zones Industrielles)
         {"q": "nouvelle+zone+artisanale+savoie+73", "type": "Industrie / Zone Pro"},
         {"q": "extension+plateforme+logistique+ain+01", "type": "Logistique / Marquage Intérieur"},
-        # 3. Ouvertures Prochaines (Le timing parfait)
         {"q": "ouverture+prochaine+magasin+haute-savoie", "type": "Commerce"},
         {"q": "boulangerie+en+construction+savoie", "type": "Boulangerie"}
     ]
@@ -41,9 +38,11 @@ def scrape_expert_system():
                 titre_elem = art.find('a', class_='J7YVsc') or art.find('h3')
                 if titre_elem:
                     titre = titre_elem.text
-                    lien = "https://news.google.com" + art.find('a')['href'][1:]
+                    # Récupération du lien
+                    link_elem = art.find('a')
+                    lien = "https://news.google.com" + link_elem['href'][1:] if link_elem else "Lien indisponible"
                     
-                    # On devine le département à partir du titre
+                    # Détection du département
                     dept = "74"
                     if "73" in titre or "Savoie" in titre: dept = "73"
                     if "01" in titre or "Ain" in titre: dept = "01"
@@ -52,8 +51,8 @@ def scrape_expert_system():
                         "name": titre[:120],
                         "type": cible['type'],
                         "location": f"Détecté en {dept}",
-                        "notes": f"INDICE FORT : {cible['type']} détecté. Potentiel marquage au sol important.",
-                        "estimated_value": "À chiffrer (Projet Neuf)",
+                        "notes": f"INDICE FORT : {cible['type']} détecté via presse/annonces.",
+                        "estimated_value": "À chiffrer",
                         "status": "new",
                         "source_url": lien,
                         "department": dept,
@@ -63,15 +62,21 @@ def scrape_expert_system():
         except Exception as e:
             print(f"Erreur sur {cible['type']}: {e}")
 
-    # SAUVEGARDE ET ENVOI
+    # SAUVEGARDE DU FICHIER ARTEFACT
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    with open(f"leads_progmarquage_{timestamp}.json", 'w', encoding='utf-8') as f:
+    filename = f"leads_progmarquage_{timestamp}.json"
+    with open(filename, 'w', encoding='utf-8') as f:
         json.dump(leads_extraits, f, ensure_ascii=False, indent=2)
 
+    # ENVOI VERS SUPABASE
     if leads_extraits:
         try:
-            # On utilise le 'upsert' sur le titre pour éviter les doublons
             supabase.table("leads").insert(leads_extraits).execute()
-            print(f"✅ TERMINÉ : {len(leads_extraits)} projets envoyés sur le SaaS !")
+            print(f"✅ TERMINÉ : {len(leads_extraits)} projets envoyés au SaaS.")
         except Exception as e:
-            print(f"Erreur Sup
+            print(f"Erreur Supabase : {e}")
+    else:
+        print("⚠️ Aucune nouvelle annonce détectée aujourd'hui.")
+
+if __name__ == "__main__":
+    scrape_expert_system()
