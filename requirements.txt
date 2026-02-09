@@ -1,16 +1,4 @@
-# Dépendances pour le scraper ProgMarquage
-
-# Web scraping
-requests==2.31.0
-beautifulsoup4==4.12.3
-lxml==5.1.0
-
-# Base de données
-supabase==2.3.0
-
-# Utilitaires
-python-dotenv==1.0.1
-pip install requests beautifulsoup4 lxml supabase
-python progmarquage_scraper.py
-pip install requests beautifulsoup4 lxml supabase
-python progmarquage_scraper.py
+requests
+beautifulsoup4
+lxml
+supabase
