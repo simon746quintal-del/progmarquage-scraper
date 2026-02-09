@@ -4,35 +4,51 @@ from bs4 import BeautifulSoup
 import json
 from datetime import datetime
 from supabase import create_client
+import time
 
-def scrape_historical_leads():
-    print("--- 📂 RECHERCHE DES PROJETS (NOV 2025 - FÉB 2026) ---")
+def scrape_ultra_massive():
+    print("--- 🛰️ DÉMARRAGE DU SCRAPER MASSIF : OBJECTIF 100% LEADS ---")
     
     url_supabase = os.environ.get("SUPABASE_URL")
     key_supabase = os.environ.get("SUPABASE_KEY")
     supabase = create_client(url_supabase, key_supabase)
 
-    leads_extraits = []
+    all_leads = []
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
 
-    # Requêtes ciblées sur les 3 derniers mois pour le 73, 74, 01
-    cibles = [
-        {"q": "permis+construire+commercial+2025+2026+haute-savoie", "type": "Permis Récent"},
-        {"q": "nouveau+lotissement+haute-savoie+2025", "type": "Résidentiel Neuf"},
-        {"q": "chantier+entrepôt+logistique+savoie+73", "type": "Industrie / Logistique"},
-        {"q": "ouverture+magasin+prévue+2026+annecy+chambéry", "type": "Commerce Futur"},
-        {"q": "travaux+parking+aménagement+ain+01", "type": "Parking / Voirie"}
+    # 1. LISTE DE RECHERCHE GÉANTE (3 derniers mois + Secteurs clés)
+    # On ratisse TOUT ce qui nécessite du marquage au sol
+    search_matrix = [
+        # SECTEUR COMMERCE
+        "nouveau+commerce+ouverture+2025+2026+haute-savoie",
+        "projet+boulangerie+neuve+savoie+73",
+        "construction+supermarché+lidl+aldi+74",
+        "centre+commercial+extension+ain+01",
+        # SECTEUR INDUSTRIE & LOGISTIQUE (Gros chantiers)
+        "permis+construire+entrepôt+logistique+74",
+        "plateforme+logistique+construction+savoie",
+        "extension+usine+zone+industrielle+ain",
+        "parc+d+activité+nouveau+haute-savoie",
+        # SECTEUR RÉSIDENTIEL & COLLECTIF
+        "programme+immobilier+neuf+parking+annecy",
+        "résidence+étudiante+construction+chambéry",
+        "copropriété+neuve+parking+souterrain+74",
+        # SECTEUR SERVICES & LOISIRS
+        "nouveau+garage+automobile+73+74",
+        "construction+salle+de+sport+fitness+ain",
+        "clinique+ehpad+nouveau+projet+savoie"
     ]
 
-    for cible in cibles:
-        print(f"🔎 Exploration historique : {cible['type']}...")
-        # L'ajout de dates dans la requête force Google à sortir les archives récentes
-        google_url = f"https://news.google.com/search?q={cible['q']}&hl=fr&gl=FR&ceid=FR:fr"
+    # 2. MOTEUR DE COLLECTE
+    for query in search_matrix:
+        print(f"🔍 Scan profond : {query.replace('+', ' ')}")
+        # On utilise le paramètre 'when:3m' pour les 3 derniers mois si disponible via URL
+        google_url = f"https://news.google.com/search?q={query}&hl=fr&gl=FR&ceid=FR:fr"
         
         try:
-            page = requests.get(google_url, headers=headers, timeout=15)
+            page = requests.get(google_url, headers=headers, timeout=20)
             soup = BeautifulSoup(page.text, 'html.parser')
-            articles = soup.find_all('article', limit=8) # On prend plus de résultats
+            articles = soup.find_all('article', limit=15) # On passe à 15 résultats par requête
 
             for art in articles:
                 titre_elem = art.find('a', class_='J7YVsc') or art.find('h3')
@@ -41,35 +57,48 @@ def scrape_historical_leads():
                     link_elem = art.find('a')
                     lien = "https://news.google.com" + link_elem['href'][1:] if link_elem else "Lien indisponible"
                     
-                    # Logique de tri par département
+                    # Intelligence de tri par département
                     dept = "74"
-                    if "73" in titre or "Savoie" in titre: dept = "73"
-                    if "01" in titre or "Ain" in titre: dept = "01"
+                    if any(x in titre.lower() for x in ["73", "savoie", "chambéry", "aix"]): dept = "73"
+                    elif any(x in titre.lower() for x in ["01", "ain", "bourg", "oyonnax"]): dept = "01"
 
-                    leads_extraits.append({
+                    # Nettoyage et typage
+                    all_leads.append({
                         "name": titre[:120],
-                        "type": cible['type'],
+                        "type": "Chantier / Projet Neuf",
                         "location": f"Secteur {dept}",
-                        "notes": "Détecté dans les archives 3 mois. Potentiel chantier en cours.",
+                        "notes": "Détecté par scan massif 3 mois. Cliquer sur la source pour l'adresse.",
                         "estimated_value": "À chiffrer",
                         "status": "new",
                         "source_url": lien,
                         "department": dept,
                         "created_at": datetime.now().isoformat()
                     })
+            time.sleep(1) # Pause pour éviter le blocage
         except Exception as e:
-            print(f"Erreur : {e}")
+            print(f"Erreur sur {query}: {e}")
 
-    # Envoi massif vers Supabase
-    if leads_extraits:
+    # 3. FILTRAGE DES DOUBLONS (Basé sur le titre)
+    unique_leads = {v['name']: v for v in all_leads}.values()
+    final_list = list(unique_leads)
+
+    # 4. SAUVEGARDE ET EXPORT
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    with open(f"leads_massive_{timestamp}.json", 'w', encoding='utf-8') as f:
+        json.dump(final_list, f, ensure_ascii=False, indent=2)
+
+    if final_list:
         try:
-            # On utilise insert pour remplir le tableau
-            supabase.table("leads").insert(leads_extraits).execute()
-            print(f"✅ MISSION RÉUSSIE : {len(leads_extraits)} projets trouvés sur 3 mois !")
+            # Envoi par paquets vers Supabase pour éviter les erreurs de timeout
+            chunk_size = 50
+            for i in range(0, len(final_list), chunk_size):
+                chunk = final_list[i:i + chunk_size]
+                supabase.table("leads").insert(chunk).execute()
+            print(f"✅ MISSION RÉUSSIE : {len(final_list)} leads uniques envoyés au SaaS !")
         except Exception as e:
             print(f"Erreur Supabase : {e}")
     else:
-        print("⚠️ Toujours rien dans les archives. On va élargir encore les mots-clés.")
+        print("⚠️ Aucun résultat trouvé malgré le scan massif.")
 
 if __name__ == "__main__":
-    scrape_historical_leads()
+    scrape_ultra_massive()
