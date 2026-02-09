@@ -1,55 +1,41 @@
-import requests
-from bs4 import BeautifulSoup
 import os
+import json
+from datetime import datetime
 from supabase import create_client
-from datetime import datetime, timedelta
 
-# Configuration Supabase
-url = os.environ.get("SUPABASE_URL")
-key = os.environ.get("SUPABASE_KEY")
-supabase = create_client(url, key)
-
-def scrape_leads():
-    print("Démarrage du scan large (30 jours)...")
-    leads = []
+def run_safe_scraper():
+    print("--- DÉMARRAGE DU SCRAPER DE SECOURS ---")
     
-    # Simulation de détection de projets pour test (73, 74, 01)
-    # Dans la version réelle, ce bloc analyse les sites de presse et marchés publics
-    mots_cles = ["parking", "marquage", "entrepôt", "commerce", "construction", "lotissement"]
-    
-    # Exemple de lead trouvé (simulation d'un projet réel pour peupler ton SaaS)
-    sample_leads = [
+    # 1. Données de test forcées
+    leads_a_sauver = [
         {
-            "title": "Extension Parking Super U",
+            "name": "TEST : Boulangerie Neuve",
+            "type": "Commerce",
             "location": "Rumilly (74)",
-            "description": "Création de 50 nouvelles places de stationnement. Marquage au sol nécessaire.",
-            "source_url": "https://www.ledauphine.com",
-            "created_at": datetime.now().isoformat(),
-            "status": "Nouveau",
-            "potential_value": "2500€"
-        },
-        {
-            "title": "Nouvelle Zone Artisanale",
-            "location": "Bourg-en-Bresse (01)",
-            "description": "Aménagement de voirie pour 4 nouveaux bâtiments industriels.",
-            "source_url": "https://www.leprogres.fr",
-            "created_at": datetime.now().isoformat(),
-            "status": "Urgent",
-            "potential_value": "8000€"
+            "notes": "Chantier en cours, besoin marquage parking.",
+            "estimated_value": "4000€",
+            "status": "new"
         }
     ]
 
-    for lead in sample_leads:
-        try:
-            # Envoi vers Supabase
-            data = supabase.table("leads").insert(lead).execute()
-            print(f"✅ Lead ajouté : {lead['title']}")
-            leads.append(lead)
-        except Exception as e:
-            print(f"❌ Erreur Supabase : {e}")
+    # 2. Création du fichier JSON (Quoi qu'il arrive)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"leads_progmarquage_{timestamp}.json"
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(leads_a_sauver, f, ensure_ascii=False, indent=2)
+    print(f"✅ Fichier créé : {filename}")
 
-    if not leads:
-        print("Aucun nouveau lead trouvé aujourd'hui.")
+    # 3. Tentative d'envoi Supabase
+    try:
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_KEY")
+        supabase = create_client(url, key)
+        # On essaie d'insérer dans 'leads'
+        supabase.table("leads").insert(leads_a_sauver).execute()
+        print("✅ Données envoyées à Supabase !")
+    except Exception as e:
+        print(f"⚠️ Erreur Supabase (mais le fichier JSON est sauvé) : {e}")
 
 if __name__ == "__main__":
-    scrape_leads()
+    run_safe_scraper()
